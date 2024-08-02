@@ -475,7 +475,7 @@ def get_wilson_b_matrix(mol : Chem.rdchem.Mol) -> np.ndarray:
     """
 
     coords = parse_coords_from_mol(mol).flatten()
-    int_coords_list = parse_to_internal(mol)
+    int_coords_list = parse_to_internal(mol, coords)
     return int_coords_list, wilson_b_matrix(coords.flatten(), *int_coords_list)
 
 def gradient_to_internal(mol : Chem.rdchem.Mol,
