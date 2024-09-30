@@ -1,5 +1,7 @@
 import numpy as np
 
+from typing import Tuple, Union
+
 from rdkit import Chem
 from rdkit.Chem import rdMolTransforms
 
@@ -123,11 +125,17 @@ class ConfCalc:
                   xyz_name : str,
                   inp_name : str,
                   req_opt : bool = True,
-                  req_grad : bool = True) -> str:
+                  req_grad : bool = True) -> Union[str, None]:
         """
             Runs xtb with current xyz_file, returns name of log file
-            xyz_name - name of .xyz file
-            inp_name - name of .inp file
+            Args:
+                xyz_name - name of .xyz file
+                inp_name - name of .inp file
+                req_opt - optimization or single-point energy
+                req_grad - gradients required
+            Returns:
+                logfile name if optimization succeeded, None otherwise
+
         """
 
         log_name = xyz_name[:-3] + "log"
@@ -136,12 +144,22 @@ class ConfCalc:
         while True:
             try:
                 with open(log_name, "r") as file:
+                    file_lines = [line for line in file]    
+
                     line_with_en = [
-                        line for line in file
-                            if "TOTAL ENERGY" in line
+                        line for line in file_lines
+                        if "TOTAL ENERGY" in line
                     ]
+
+                    line_with_error = [
+                        line for line in file_lines
+                        if "[ERROR] Program stopped due to fatal error" in line
+                    ]
+
                     if len(line_with_en) != 0:
                         return log_name
+                    if len(line_with_error) != 0:
+                        return None
             except FileNotFoundError:
                 pass
             finally:
@@ -178,7 +196,7 @@ class ConfCalc:
                       mol : Chem.Mol, 
                       inp_name : str,
                       req_opt : bool = True,
-                      req_grad : bool = True) -> float:
+                      req_grad : bool = True) -> Tuple[float, float]:
         """
             Calculates energy of given molecule via xtb
             inp_name - name of file with input
@@ -189,6 +207,10 @@ class ConfCalc:
                                   inp_name, 
                                   req_opt=req_opt,
                                   req_grad=req_grad)
+        
+        if log_name is None:
+            return None, None
+        
         irc_grad = None
         if req_grad:
             cart_grads = self.__parse_grads_from_grads_file(len(mol.GetAtoms()))
@@ -200,6 +222,7 @@ class ConfCalc:
                                                cart_grads.flatten(),
                                                Dihedral(*rotable_idx))    
                 ))
+        
         return self.__parse_energy_from_log(log_name), irc_grad
 
     def get_energy(self, 
@@ -220,7 +243,8 @@ class ConfCalc:
                                           inp_name, 
                                           req_opt=req_opt,
                                           req_grad=req_grad)
-        energy -= self.norm_en
+        if energy:
+            energy -= self.norm_en
 
         return {    
             'energy' : energy,
